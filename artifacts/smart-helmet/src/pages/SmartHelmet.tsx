@@ -504,21 +504,6 @@ export default function SmartHelmet() {
           </div>
         )}
 
-        {/* Demo */}
-        {!isConnected && (
-          <div className="text-center">
-            <button
-              onClick={() => {
-                audioUnlockedRef.current = true;
-                setData({ helmetWorn: true, alcoholDetected: false, alcoholValue: 87, drowsy: false, motorOn: true, ledOn: true, buzzerOn: false, distance: 85, rssi: -65, lastUpdated: new Date() });
-              }}
-              className="text-xs helmet-text-muted text-slate-500 underline underline-offset-2 hover:text-slate-400 transition-colors"
-            >
-              Preview with demo data
-            </button>
-          </div>
-        )}
-
         {/* Footer */}
         <div className="text-center text-xs helmet-footer-text text-slate-600 pb-4 space-y-1">
           <p>Smart Helmet System • ESP32 WiFi Monitor</p>
