@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Settings, X, Bell, BellOff, Volume2, VolumeX, HardHat, FlaskConical, Eye, SlidersHorizontal } from "lucide-react";
+import { Settings, X, Bell, BellOff, Volume2, VolumeX, HardHat, FlaskConical, Eye, SlidersHorizontal, Send } from "lucide-react";
 
 export interface AlertConfig {
   helmetAlert: boolean;
   alcoholAlert: boolean;
   drowsyAlert: boolean;
   audioEnabled: boolean;
+  visualAlerts: boolean;
+  autoAlert: boolean;
   mq3Threshold: number;
 }
 
@@ -14,6 +16,8 @@ export const defaultAlertConfig: AlertConfig = {
   alcoholAlert: true,
   drowsyAlert: true,
   audioEnabled: true,
+  visualAlerts: true,
+  autoAlert: false,
   mq3Threshold: 400,
 };
 
@@ -40,18 +44,20 @@ function ToggleRow({ icon, label, description, checked, onChange, dangerColor }:
           <p className="text-xs text-slate-500">{description}</p>
         </div>
       </div>
-      <button
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-          checked ? (dangerColor ? "bg-red-500" : "bg-cyan-500") : "bg-slate-600"
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
-            checked ? "translate-x-6" : "translate-x-1"
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onChange(!checked)}
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+            checked ? (dangerColor ? "bg-red-500" : "bg-cyan-500") : "bg-slate-600"
           }`}
-        />
-      </button>
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+              checked ? "translate-x-6" : "translate-x-1"
+            }`}
+          />
+        </button>
+      </div>
     </div>
   );
 }
@@ -59,9 +65,10 @@ function ToggleRow({ icon, label, description, checked, onChange, dangerColor }:
 interface AlertSettingsProps {
   config: AlertConfig;
   onChange: (config: AlertConfig) => void;
+  onTestSound?: (type: "helmet" | "alcohol" | "drowsy" | "distance") => void;
 }
 
-export function AlertSettings({ config, onChange }: AlertSettingsProps) {
+export function AlertSettings({ config, onChange, onTestSound }: AlertSettingsProps) {
   const [open, setOpen] = useState(false);
 
   const update = (key: keyof AlertConfig, value: boolean | number) => {
@@ -119,30 +126,45 @@ export function AlertSettings({ config, onChange }: AlertSettingsProps) {
             <div className="px-5 py-2">
               {/* Section: Alert Types */}
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-3 mb-1">Alert Types</p>
-              <ToggleRow
-                icon={<HardHat className="w-4 h-4" />}
-                label="Helmet Alert"
-                description="Alert when helmet is not worn"
-                checked={config.helmetAlert}
-                onChange={(v) => update("helmetAlert", v)}
-                dangerColor
-              />
-              <ToggleRow
-                icon={<FlaskConical className="w-4 h-4" />}
-                label="Alcohol Alert"
-                description="Alert when alcohol is detected"
-                checked={config.alcoholAlert}
-                onChange={(v) => update("alcoholAlert", v)}
-                dangerColor
-              />
-              <ToggleRow
-                icon={<Eye className="w-4 h-4" />}
-                label="Drowsiness Alert"
-                description="Alert when drowsiness is detected"
-                checked={config.drowsyAlert}
-                onChange={(v) => update("drowsyAlert", v)}
-                dangerColor
-              />
+              <div className="relative">
+                <ToggleRow
+                  icon={<HardHat className="w-4 h-4" />}
+                  label="Helmet Alert"
+                  description="Alert when helmet is not worn"
+                  checked={config.helmetAlert}
+                  onChange={(v) => update("helmetAlert", v)}
+                  dangerColor
+                />
+                {onTestSound && (
+                  <button onClick={() => onTestSound("helmet")} className="absolute right-14 top-4 p-1 rounded-md bg-slate-800 text-slate-400 hover:text-white text-[10px] font-bold">TEST</button>
+                )}
+              </div>
+              <div className="relative">
+                <ToggleRow
+                  icon={<FlaskConical className="w-4 h-4" />}
+                  label="Alcohol Alert"
+                  description="Alert when alcohol is detected"
+                  checked={config.alcoholAlert}
+                  onChange={(v) => update("alcoholAlert", v)}
+                  dangerColor
+                />
+                {onTestSound && (
+                  <button onClick={() => onTestSound("alcohol")} className="absolute right-14 top-4 p-1 rounded-md bg-slate-800 text-slate-400 hover:text-white text-[10px] font-bold">TEST</button>
+                )}
+              </div>
+              <div className="relative">
+                <ToggleRow
+                  icon={<Eye className="w-4 h-4" />}
+                  label="Drowsiness Alert"
+                  description="Alert when drowsiness is detected"
+                  checked={config.drowsyAlert}
+                  onChange={(v) => update("drowsyAlert", v)}
+                  dangerColor
+                />
+                {onTestSound && (
+                  <button onClick={() => onTestSound("drowsy")} className="absolute right-14 top-4 p-1 rounded-md bg-slate-800 text-slate-400 hover:text-white text-[10px] font-bold">TEST</button>
+                )}
+              </div>
 
               {/* Section: Audio */}
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-5 mb-1">Audio</p>
@@ -152,6 +174,20 @@ export function AlertSettings({ config, onChange }: AlertSettingsProps) {
                 description="Play buzzer sound on danger events"
                 checked={config.audioEnabled}
                 onChange={(v) => update("audioEnabled", v)}
+              />
+              <ToggleRow
+                icon={<Bell className="w-4 h-4" />}
+                label="Visual Alerts"
+                description="Show pop-up notifications on dashboard"
+                checked={config.visualAlerts}
+                onChange={(v) => update("visualAlerts", v)}
+              />
+              <ToggleRow
+                icon={<Send className="w-4 h-4" />}
+                label="Automatic SMS"
+                description="Background SMS after 5s of danger"
+                checked={config.autoAlert}
+                onChange={(v) => update("autoAlert", v)}
               />
 
               {/* Section: Thresholds */}

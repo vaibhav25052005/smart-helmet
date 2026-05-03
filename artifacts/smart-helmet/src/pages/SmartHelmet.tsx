@@ -9,8 +9,9 @@ import { RulesPanel } from "@/components/RulesPanel";
 import {
   Wifi, WifiOff, HardHat, FlaskConical, Eye, Zap, AlertTriangle,
   Activity, Clock, Plug, PlugZap, Lightbulb, Bell, Ruler, Signal,
-  Sun, Moon,
+  Sun, Moon, MessageCircle, Users
 } from "lucide-react";
+import { FamilyContacts, Contact } from "@/components/FamilyContacts";
 
 const initialData: HelmetData = {
   helmetWorn: null, alcoholDetected: null, alcoholValue: null, drowsy: null,
@@ -73,25 +74,49 @@ function StatusCard({ icon, label, value, status, sub, blinking }: StatusCardPro
   );
 }
 
-function AlertBanner({ messages }: { messages: string[] }) {
+function AlertBanner({ messages, countdown, onSendEmergency }: { messages: string[], countdown: number | null, onSendEmergency?: () => void }) {
   if (!messages.length) return null;
   return (
-    <div className="helmet-danger-banner rounded-xl border border-red-700/60 bg-red-950/50 p-4 ring-1 ring-red-500/20 shadow-[0_0_30px_rgba(248,113,113,0.15)]">
-      <div className="flex items-start gap-3">
-        <div className="p-1.5 rounded-lg bg-red-900/60 shrink-0 blink-danger">
-          <AlertTriangle className="w-5 h-5 text-red-400" />
+    <div className="helmet-danger-banner rounded-2xl border border-red-500/30 bg-red-950/40 p-4 ring-1 ring-red-500/20 shadow-[0_0_40px_rgba(239,68,68,0.2)] flex justify-between items-center gap-4 animate-in slide-in-from-top duration-500">
+      <div className="flex items-start gap-4">
+        <div className="p-2 rounded-xl bg-red-500/20 ring-1 ring-red-500/40 shrink-0 blink-danger">
+          <AlertTriangle className="w-6 h-6 text-red-400" />
         </div>
-        <div>
-          <p className="font-bold text-red-300 text-sm uppercase tracking-wide mb-1">Danger Detected</p>
-          <ul className="space-y-0.5">
+        <div className="flex-1">
+          <p className="font-black text-red-200 text-sm uppercase tracking-wider mb-1.5">Danger Detected</p>
+          <ul className="space-y-1">
             {messages.map((m, i) => (
-              <li key={i} className="text-sm text-red-400 flex items-center gap-2">
-                <span className="w-1 h-1 rounded-full bg-red-400 shrink-0" />
+              <li key={i} className="text-xs text-red-300 flex items-center gap-2 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                 {m}
               </li>
             ))}
           </ul>
+          {countdown !== null && (
+            <div className="mt-3 flex items-center gap-2">
+              <div className="h-1 flex-1 bg-red-900/50 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-red-500 transition-all duration-1000 ease-linear" 
+                  style={{ width: `${(countdown / 5) * 100}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-red-400 font-black uppercase whitespace-nowrap">
+                Alerting Family in {countdown}s
+              </p>
+            </div>
+          )}
         </div>
+      </div>
+      <div className="flex flex-col gap-2 shrink-0">
+        {onSendEmergency && (
+          <button
+            onClick={onSendEmergency}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-black transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:scale-105 active:scale-95"
+          >
+            <MessageCircle className="w-4 h-4" />
+            SOS NOW
+          </button>
+        )}
       </div>
     </div>
   );
@@ -100,20 +125,23 @@ function AlertBanner({ messages }: { messages: string[] }) {
 export default function SmartHelmet() {
   const { theme, toggle: toggleTheme } = useTheme();
   const [data, setData] = useState<HelmetData>(initialData);
-  const [ip, setIp] = useState("192.168.1.100");
+  const [ip, setIp] = useState("10.180.4.20");
   const [port, setPort] = useState("81");
   const [alertConfig, setAlertConfig] = useState<AlertConfig>(defaultAlertConfig);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [lastRawData, setLastRawData] = useState<string>("");
 
   const { playAlert } = useAudioBuzzer();
   const { permission, requestPermission, notifications, addNotification, markAllRead, clearAll, unreadCount } = useNotifications();
 
-  const prevDangerRef = useRef({ helmet: false, alcohol: false, drowsy: false, distance: false });
+  const prevDangerRef = useRef({ helmet: false, alcohol: false, drowsy: false, distance: false, sos: false });
   const audioUnlockedRef = useRef(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
-  const handleData = useCallback((incoming: Partial<HelmetData>) => {
+  const handleData = useCallback((incoming: Partial<HelmetData>, raw?: string) => {
     setData((prev) => ({ ...prev, ...incoming }));
+    if (raw) setLastRawData(raw);
   }, []);
 
   const { status, error, connect, disconnect } = useWifi(handleData);
@@ -141,17 +169,64 @@ export default function SmartHelmet() {
       if (distanceDanger && !prevDangerRef.current.distance) playAlert("distance");
     }
 
-    if (helmetDanger && !prevDangerRef.current.helmet)
-      addNotification("Helmet Rule Violated", "Rider is not wearing the helmet. Motor may be disabled.", "danger");
-    if (alcoholDanger && !prevDangerRef.current.alcohol)
-      addNotification("Alcohol Detected", `MQ3: ${data.alcoholValue ?? "—"}, limit: ${alertConfig.mq3Threshold}. Do not operate the motor.`, "danger");
-    if (drowsyDanger && !prevDangerRef.current.drowsy)
-      addNotification("Drowsiness Detected", "Rider appears to be drowsy. Stop immediately and rest.", "danger");
-    if (distanceDanger && !prevDangerRef.current.distance)
-      addNotification("Obstacle Too Close", `Distance: ${data.distance?.toFixed(1) ?? "—"} cm. Obstacle detected!`, "warning");
+    if (alertConfig.visualAlerts) {
+      if (helmetDanger && !prevDangerRef.current.helmet)
+        addNotification("Helmet Rule Violated", "Rider is not wearing the helmet. Motor may be disabled.", "danger");
+      if (alcoholDanger && !prevDangerRef.current.alcohol)
+        addNotification("Alcohol Detected", `MQ3: ${data.alcoholValue ?? "—"}, limit: ${alertConfig.mq3Threshold}. Do not operate the motor.`, "danger");
+      if (drowsyDanger && !prevDangerRef.current.drowsy)
+        addNotification("Drowsiness Detected", "Rider appears to be drowsy. Stop immediately and rest.", "danger");
+      if (distanceDanger && !prevDangerRef.current.distance)
+        addNotification("Obstacle Too Close", `Distance: ${data.distance?.toFixed(1) ?? "—"} cm. Obstacle detected!`, "warning");
+      if (data.sos && !prevDangerRef.current.sos)
+        addNotification("SOS TRIGGERED", "Physical emergency button pressed!", "danger");
+    }
 
-    prevDangerRef.current = { helmet: helmetDanger, alcohol: alcoholDanger, drowsy: drowsyDanger, distance: distanceDanger };
-  }, [data.helmetWorn, effectiveAlcoholDetected, data.drowsy, distanceDanger, data.alcoholValue, data.distance, alertConfig, playAlert, addNotification]);
+    // INSTANT SOS TRIGGER
+    if (data.sos && !prevDangerRef.current.sos && isConnected) {
+      sendEmergencyMessage();
+    }
+
+    prevDangerRef.current = { helmet: helmetDanger, alcohol: alcoholDanger, drowsy: drowsyDanger, distance: distanceDanger, sos: !!data.sos };
+
+    // Automatic Alert Countdown Logic
+    const criticalDanger = helmetDanger || alcoholDanger || drowsyDanger;
+    if (alertConfig.autoAlert && criticalDanger && isConnected) {
+      if (countdown === null) {
+        setCountdown(5);
+      }
+    } else {
+      setCountdown(null);
+    }
+  }, [data.helmetWorn, effectiveAlcoholDetected, data.drowsy, distanceDanger, data.alcoholValue, data.distance, alertConfig, playAlert, addNotification, isConnected, countdown]);
+
+  const sendEmergencyMessage = useCallback(() => {
+    const saved = localStorage.getItem("helmet_family_contacts");
+    if (saved) {
+      const contacts: Contact[] = JSON.parse(saved);
+      if (contacts.length > 0) {
+        const first = contacts[0];
+        const method = localStorage.getItem("helmet_msg_method") || "whatsapp";
+        const text = `🚨 EMERGENCY: Smart Helmet alert detected! \nStatus:\n- Helmet: ${data.helmetWorn ? "Worn" : "Not Worn"}\n- Alcohol: ${effectiveAlcoholDetected ? "Detected" : "Safe"}\n- Drowsiness: ${data.drowsy ? "Detected" : "Safe"}\nCheck on the rider immediately.`;
+        
+        if (method === "whatsapp") {
+          window.open(`https://wa.me/${first.phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`, "_blank");
+        } else {
+          window.open(`sms:${first.phone.replace(/\D/g, "")}?body=${encodeURIComponent(text)}`, "_blank");
+        }
+      }
+    }
+  }, [data, effectiveAlcoholDetected]);
+
+  useEffect(() => {
+    if (countdown !== null && countdown > 0) {
+      const t = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(t);
+    } else if (countdown === 0) {
+      sendEmergencyMessage();
+      setCountdown(null);
+    }
+  }, [countdown, sendEmergencyMessage]);
 
   const dangerMessages: string[] = [];
   if (alertConfig.helmetAlert && data.helmetWorn === false) dangerMessages.push("Helmet not worn — rider at risk!");
@@ -305,9 +380,16 @@ export default function SmartHelmet() {
         {/* Toolbar */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex-1">
-            {isConnected && <AlertBanner messages={dangerMessages} />}
+            {isConnected && (
+              <AlertBanner
+                messages={dangerMessages}
+                countdown={countdown}
+                onSendEmergency={sendEmergencyMessage}
+              />
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <FamilyContacts />
             <RulesPanel open={rulesOpen} onOpenChange={setRulesOpen} />
             <NotificationPanel
               notifications={notifications}
@@ -319,7 +401,6 @@ export default function SmartHelmet() {
               open={notifPanelOpen}
               onOpenChange={(v) => { setNotifPanelOpen(v); if (v) markAllRead(); }}
             />
-            <AlertSettings config={alertConfig} onChange={setAlertConfig} />
           </div>
         </div>
 
@@ -504,11 +585,28 @@ export default function SmartHelmet() {
           </div>
         )}
 
-        {/* Footer */}
-        <div className="text-center text-xs helmet-footer-text text-slate-600 pb-4 space-y-1">
-          <p>Smart Helmet System • ESP32 WiFi Monitor</p>
-          <p>ESP32 sends data via WebSocket server on port 81</p>
-          <p className="font-mono helmet-footer-mono text-slate-700">helmet:1,alcohol:0,mq3:87,drowsy:0,motor:1,led:1,buzzer:0,dist:85,rssi:-65</p>
+        {/* Footer & Settings */}
+        <div className="pt-8 border-t border-slate-700/40 flex flex-col items-center gap-6">
+          <AlertSettings 
+            config={alertConfig} 
+            onChange={setAlertConfig} 
+            onTestSound={playAlert}
+          />
+          
+          <div className="text-center text-xs helmet-footer-text text-slate-600 pb-4 space-y-2">
+            <p>Smart Helmet System • ESP32 WiFi Monitor</p>
+            {isConnected && lastRawData && (
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-[10px] text-emerald-500/60 font-black uppercase tracking-widest">Real-Time Data Stream</p>
+                <p className="font-mono helmet-footer-mono text-slate-500 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-700/30 max-w-lg break-all">
+                  {lastRawData}
+                </p>
+              </div>
+            )}
+            {!isConnected && (
+              <p className="text-slate-700">Waiting for real-time link...</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

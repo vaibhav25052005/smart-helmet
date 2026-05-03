@@ -12,6 +12,7 @@ export interface HelmetData {
   buzzerOn: boolean | null;
   distance: number | null;
   rssi: number | null;
+  sos: boolean | null;
   lastUpdated: Date | null;
 }
 
@@ -32,11 +33,12 @@ function parseHelmetData(raw: string): Partial<HelmetData> {
     if (k === "buzzer") result.buzzerOn = v === "1" || v === "on";
     if (k === "dist" || k === "distance") result.distance = parseFloat(v) || 0;
     if (k === "rssi") result.rssi = parseFloat(v) || 0;
+    if (k === "sos") result.sos = v === "1" || v === "active";
   }
   return result;
 }
 
-export function useWifi(onData: (data: Partial<HelmetData>) => void) {
+export function useWifi(onData: (data: Partial<HelmetData>, raw?: string) => void) {
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -82,13 +84,14 @@ export function useWifi(onData: (data: Partial<HelmetData>) => void) {
 
     ws.onmessage = (event) => {
       const text = typeof event.data === "string" ? event.data : "";
-      bufferRef.current += text;
-      const lines = bufferRef.current.split("\n");
-      bufferRef.current = lines.pop() ?? "";
+      if (!text.trim()) return;
+
+      // Handle both single-line and multi-line data
+      const lines = text.split("\n");
       for (const line of lines) {
         if (line.trim()) {
           const parsed = parseHelmetData(line);
-          onData({ ...parsed, lastUpdated: new Date() });
+          onData({ ...parsed, lastUpdated: new Date() }, line);
         }
       }
     };
